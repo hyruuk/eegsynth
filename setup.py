@@ -24,7 +24,7 @@ long_description = long_description.replace(
 
 setuptools.setup(
     name="eegsynth",
-    version="0.2.6",
+    version="0.2.8",
     description="Converting real-time EEG into sounds, music and visual effects",
     long_description=long_description,
     long_description_content_type="text/markdown",
@@ -68,13 +68,13 @@ setuptools.setup(
     packages=["eegsynth"] + ["eegsynth." + s for s in setuptools.find_packages(".")],
     install_requires=[
         "bitalino",
+        "colorama",
         "configparser",
         "fuzzywuzzy[speedup]",
         "matplotlib",
         "mido",
         "mido",
         "nilearn",
-        "numpy",
         "numpy",
         "paho-mqtt",
         "pyaudio",

@@ -51,6 +51,21 @@ sys.path.insert(0, os.path.join(path,'../../lib'))
 import EEGsynth
 
 
+def UpdateVelocity():
+    global patch, velocity_note, scale_velocity, offset_velocity
+    velocity_note = patch.getfloat('velocity', 'note', default=64)
+    velocity_note = int(EEGsynth.rescale(velocity_note, slope=scale_velocity, offset=offset_velocity))
+
+
+def UpdateDuration():
+    global patch, duration_note, scale_duration, offset_duration
+    duration_note = patch.getfloat('duration', 'note', default=None)
+    if duration_note != None:
+        duration_note = EEGsynth.rescale(duration_note, slope=scale_duration, offset=offset_duration)
+        # some minimal time is needed for the duration
+        duration_note = EEGsynth.limit(duration_note, 0.05, float('Inf'))
+
+
 def SetNoteOn(note, velocity):
     global previous_note
     if monophonic and previous_note != None:
@@ -106,7 +121,7 @@ def sendMidi(name, code, val):
         SetNoteOn(code, val)
         return
 
-    monitor.info(name, code, val)
+    monitor.info(str(name) + " " + str(code) + " " + str(val))
 
     if name.startswith('control'):
         if midichannel is None:
@@ -159,7 +174,7 @@ class TriggerThread(threading.Thread):
                 if not self.running or not item['type'] == 'message':
                     break
                 if item['channel']==self.redischannel:
-                    monitor.debug(item['channel'], '=', item['data'])
+                    monitor.trace(item)
                     # map the Redis values to MIDI values
                     val = float(item['data'])
                     # the scale and offset options are channel specific and can be changed on the fly
@@ -202,7 +217,7 @@ def _start():
     This uses the global variables from setup and adds a set of global variables
     '''
     global parser, args, config, r, response, patch, name
-    global debug, mididevice, port, previous_note, UpdateVelocity, UpdateDuration, TriggerThread, trigger_name, trigger_code, code, trigger, this, thread, control_name, control_code, previous_val, SetNoteOff, SetNoteOn, duration_note, lock, midichannel, monitor, monophonic, offset_duration, offset_velocity, outputport, scale_duration, scale_velocity, sendMidi, velocity_note
+    global debug, mididevice, port, previous_note, trigger_name, trigger_code, code, trigger, this, thread, control_name, control_code, previous_val, duration_note, lock, midichannel, monitor, monophonic, offset_duration, offset_velocity, outputport, scale_duration, scale_velocity, velocity_note
 
     # this can be used to show parameters that have changed
     monitor = EEGsynth.monitor(name=name, debug=patch.getint('general','debug'))
@@ -244,19 +259,6 @@ def _start():
     velocity_note = None
     duration_note = None
 
-    def UpdateVelocity():
-        global velocity_note
-        velocity_note = patch.getfloat('velocity', 'note', default=64)
-        velocity_note = int(EEGsynth.rescale(velocity_note, slope=scale_velocity, offset=offset_velocity))
-
-    def UpdateDuration():
-        global duration_note
-        duration_note = patch.getfloat('duration', 'note', default=None)
-        if duration_note != None:
-            duration_note = EEGsynth.rescale(duration_note, slope=scale_duration, offset=offset_duration)
-            # some minimal time is needed for the duration
-            duration_note = EEGsynth.limit(duration_note, 0.05, float('Inf'))
-
     # call them once at the start
     UpdateVelocity()
     UpdateDuration()
@@ -281,7 +283,7 @@ def _start():
             # start the background thread that deals with this note
             this = TriggerThread(patch.getstring('trigger', name), name, code)
             trigger.append(this)
-            monitor.debug(name, 'trigger configured')
+            monitor.debug(name + ' trigger configured')
 
     # start the thread for each of the triggers
     for thread in trigger:
@@ -315,10 +317,7 @@ def _loop_once():
     This uses the global variables from setup and start, and adds a set of global variables
     '''
     global parser, args, config, r, response, patch
-    global debug, mididevice, port, previous_note, UpdateVelocity, UpdateDuration, TriggerThread, trigger_name, trigger_code, code, trigger, this, thread, control_name, control_code, previous_val, SetNoteOff, SetNoteOn, duration_note, lock, midichannel, monitor, monophonic, offset_duration, offset_velocity, outputport, scale_duration, scale_velocity, sendMidi, velocity_note
-
-    monitor.loop()
-    time.sleep(patch.getfloat('general', 'delay'))
+    global debug, mididevice, port, previous_note, trigger_name, trigger_code, code, trigger, this, thread, control_name, control_code, previous_val, duration_note, lock, midichannel, monitor, monophonic, offset_duration, offset_velocity, outputport, scale_duration, scale_velocity, velocity_note
 
     UpdateVelocity()
     UpdateDuration()
@@ -343,8 +342,11 @@ def _loop_once():
 def _loop_forever():
     '''Run the main loop forever
     '''
+    global monitor, patch
     while True:
+        monitor.loop()
         _loop_once()
+        time.sleep(patch.getfloat('general', 'delay'))
 
 
 def _stop():

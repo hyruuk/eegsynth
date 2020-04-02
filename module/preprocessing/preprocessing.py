@@ -46,6 +46,7 @@ sys.path.insert(0, os.path.join(path,'../../lib'))
 import EEGsynth
 import FieldTrip
 
+<<<<<<< HEAD
 parser = argparse.ArgumentParser()
 parser.add_argument("-i", "--inifile", default=os.path.join(path, os.path.splitext(file)[0] + '.ini'), help="optional name of the configuration file")
 args = parser.parse_args()
@@ -154,6 +155,125 @@ if downsample == None:
     ft_output.putHeader(3, hdr_input.fSample, FieldTrip.DATATYPE_FLOAT32, labels=hdr_input.labels)
 else:
     ft_output.putHeader(3, round(hdr_input.fSample/downsample), FieldTrip.DATATYPE_FLOAT32, labels=hdr_input.labels)
+=======
+def _setup():
+    '''Initialize the module
+    This adds a set of global variables
+    '''
+    global parser, args, config, r, response, patch, monitor, debug, ft_host, ft_port, ft_input, ft_output
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-i", "--inifile", default=os.path.join(path, name + '.ini'), help="name of the configuration file")
+    args = parser.parse_args()
+
+    config = configparser.ConfigParser(inline_comment_prefixes=('#', ';'))
+    config.read(args.inifile)
+
+    try:
+        r = redis.StrictRedis(host=config.get('redis', 'hostname'), port=config.getint('redis', 'port'), db=0, charset='utf-8', decode_responses=True)
+        response = r.client_list()
+    except redis.ConnectionError:
+        raise RuntimeError("cannot connect to Redis server")
+
+    # combine the patching from the configuration file and Redis
+    patch = EEGsynth.patch(config, r)
+
+    # this can be used to show parameters that have changed
+    monitor = EEGsynth.monitor(name=name, debug=patch.getint('general', 'debug'))
+
+    try:
+        ft_host = patch.getstring('input_fieldtrip','hostname')
+        ft_port = patch.getint('input_fieldtrip','port')
+        monitor.info('Trying to connect to buffer on %s:%i ...' % (ft_host, ft_port))
+        ft_input = FieldTrip.Client()
+        ft_input.connect(ft_host, ft_port)
+        monitor.info("Connected to input FieldTrip buffer")
+    except:
+        raise RuntimeError("cannot connect to input FieldTrip buffer")
+
+    try:
+        ft_host = patch.getstring('output_fieldtrip','hostname')
+        ft_port = patch.getint('output_fieldtrip','port')
+        monitor.info('Trying to connect to buffer on %s:%i ...' % (ft_host, ft_port))
+        ft_output = FieldTrip.Client()
+        ft_output.connect(ft_host, ft_port)
+        monitor.info("Connected to output FieldTrip buffer")
+    except:
+        raise RuntimeError("cannot connect to output FieldTrip buffer")
+
+
+def _start():
+    '''Start the module
+    This uses the global variables from setup and adds a set of global variables
+    '''
+    global parser, args, config, r, response, patch, monitor, debug, ft_host, ft_port, ft_input, ft_output, name
+    global timeout, hdr_input, start, window, downsample, differentiate, integrate, rectify, smoothing, reference, default_scale, scale_lowpass, scale_highpass, scale_notchfilter, offset_lowpass, offset_highpass, offset_notchfilter, scale_filterorder, scale_notchquality, offset_filterorder, offset_notchquality, previous, differentiate_zi, integrate_zi, begsample, endsample
+
+    # this is the timeout for the FieldTrip buffer
+    timeout = patch.getfloat('input_fieldtrip', 'timeout', default=30)
+
+    hdr_input = None
+    start = time.time()
+    while hdr_input is None:
+        monitor.info("Waiting for data to arrive...")
+        if (time.time()-start)>timeout:
+            raise RuntimeError("timeout while waiting for data")
+        time.sleep(0.1)
+        hdr_input = ft_input.getHeader()
+
+    monitor.info("Data arrived")
+    monitor.debug(hdr_input)
+    monitor.debug(hdr_input.labels)
+
+    window = patch.getfloat('processing', 'window')
+    window = int(round(window*hdr_input.fSample))
+
+    # Processing init
+    downsample      = patch.getint('processing', 'downsample', default=None)
+    differentiate   = patch.getint('processing', 'differentiate', default=0)
+    integrate       = patch.getint('processing', 'integrate', default=0)
+    rectify         = patch.getint('processing', 'rectify', default=0)
+    downsample      = patch.getint('processing', 'downsample', default=None)
+    smoothing       = patch.getfloat('processing', 'smoothing', default=None)
+    reference       = patch.getstring('processing','reference')
+
+    try:
+        float(config.get('processing', 'highpassfilter'))
+        float(config.get('processing', 'lowpassfilter'))
+        float(config.get('processing', 'notchfilter'))
+        # the filter frequencies are specified as numbers
+        default_scale = 1.
+    except:
+        # the filter frequencies are specified as Redis channels
+        # scale them to the Nyquist frequency
+        default_scale = hdr_input.fSample/2
+
+    monitor.info('default scale for filter settings is %.0f' % (default_scale))
+
+    scale_lowpass       = patch.getfloat('scale', 'lowpassfilter', default=default_scale)
+    scale_highpass      = patch.getfloat('scale', 'highpassfilter', default=default_scale)
+    scale_notchfilter   = patch.getfloat('scale', 'notchfilter', default=default_scale)
+    offset_lowpass      = patch.getfloat('offset', 'lowpassfilter', default=0)
+    offset_highpass     = patch.getfloat('offset', 'highpassfilter', default=0)
+    offset_notchfilter  = patch.getfloat('offset', 'notchfilter', default=0)
+
+    scale_filterorder   = patch.getfloat('scale', 'filterorder', default=1)
+    scale_notchquality  = patch.getfloat('scale', 'notchquality', default=1)
+    offset_filterorder  = patch.getfloat('offset', 'filterorder', default=0)
+    offset_notchquality = patch.getfloat('offset', 'notchquality', default=0)
+
+    if downsample == None:
+        ft_output.putHeader(hdr_input.nChannels, hdr_input.fSample, FieldTrip.DATATYPE_FLOAT32, labels=hdr_input.labels)
+    else:
+        ft_output.putHeader(hdr_input.nChannels, hdr_input.fSample/downsample, FieldTrip.DATATYPE_FLOAT32, labels=hdr_input.labels)
+
+    # initialize the state for the smoothing
+    previous = np.zeros((1, hdr_input.nChannels))
+
+    # initialize the state for differentiate/integrate
+    differentiate_zi = np.zeros((1, hdr_input.nChannels))
+    integrate_zi     = np.zeros((1, hdr_input.nChannels))
+>>>>>>> origin
 
 # initialize the state for the smoothing
 previous = np.zeros((1, hdr_input.nChannels))
@@ -193,9 +313,14 @@ while True:
     dat_input  = ft_input.getData([begsample, endsample]).astype(np.float32)
     dat_output = dat_input
 
+<<<<<<< HEAD
     if debug>2:
         print("------------------------------------------------------------")
         print("read        ", window, "samples in", (time.time()-start)*1000, "ms")
+=======
+    monitor.trace("------------------------------------------------------------")
+    monitor.trace("read        " + str(window) + " samples in " + str((time.time()-start)*1000) + " ms")
+>>>>>>> origin
 
     # Online bandpass filtering
     highpassfilter = patch.getfloat('processing', 'highpassfilter', default=None)
@@ -300,3 +425,31 @@ while True:
     # increment the counters for the next loop
     begsample += window
     endsample += window
+<<<<<<< HEAD
+=======
+
+
+def _loop_forever():
+    '''Run the main loop forever
+    '''
+    while True:
+        _loop_once()
+
+
+def _stop():
+    '''Stop and clean up on SystemExit, KeyboardInterrupt
+    '''
+    global monitor, ft_input, ft_output
+
+    ft_input.disconnect()
+    monitor.success('Disconnected from input FieldTrip buffer')
+    ft_output.disconnect()
+    monitor.success('Disconnected from output FieldTrip buffer')
+    sys.exit()
+
+
+if __name__ == '__main__':
+    _setup()
+    _start()
+    _loop_forever()
+>>>>>>> origin

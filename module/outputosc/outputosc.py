@@ -122,6 +122,9 @@ def _setup():
     except redis.ConnectionError:
         raise RuntimeError("cannot connect to Redis server")
 
+    # combine the patching from the configuration file and Redis
+    patch = EEGsynth.patch(config, r)
+
     # there should not be any local variables in this function, they should all be global
     if len(locals()):
         print('LOCALS: ' + ', '.join(locals().keys()))
@@ -133,9 +136,6 @@ def _start():
     '''
     global parser, args, config, r, response, patch, name
     global monitor, debug, s, list_input, list_output, list1, list2, list3, i, j, lock, trigger, key1, key2, key3, this, thread
-
-    # combine the patching from the configuration file and Redis
-    patch = EEGsynth.patch(config, r)
 
     # this can be used to show parameters that have changed
     monitor = EEGsynth.monitor(name=name, debug=patch.getint('general','debug'))
@@ -151,7 +151,7 @@ def _start():
             s = udp_client.SimpleUDPClient(patch.getstring('osc','hostname'), patch.getint('osc','port'))
         monitor.success('Connected to OSC server')
     except:
-        raise RuntimeError("cannot connect to OSC server")
+        raise RuntimeError("Cannot connect to OSC server")
 
     # keys should be present in both the input and output section of the *.ini file
     list_input  = config.items('input')
@@ -175,7 +175,7 @@ def _start():
     for key1, key2, key3 in zip(list1, list2, list3):
         this = TriggerThread(key2, key1, key3)
         trigger.append(this)
-        monitor.debug('trigger configured for ' + key1)
+        monitor.debug(key1 + ' trigger configured')
 
     # start the thread for each of the triggers
     for thread in trigger:
@@ -188,26 +188,24 @@ def _start():
 
 def _loop_once():
     '''Run the main loop once
-    This uses the global variables from setup and start, and adds a set of global variables
     '''
-    global monitor, patch
-
-    monitor.loop()
-    time.sleep(patch.getfloat('general', 'delay'))
+    pass
 
 
 def _loop_forever():
     '''Run the main loop forever
     '''
+    global monitor, patch
     while True:
+        monitor.loop()
         _loop_once()
+        time.sleep(patch.getfloat('general', 'delay'))
 
 
 def _stop():
     '''Stop and clean up on SystemExit, KeyboardInterrupt
     '''
     global monitor, trigger, r
-
     monitor.success('Closing threads')
     for thread in trigger:
         thread.stop()
