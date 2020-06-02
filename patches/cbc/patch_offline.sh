@@ -7,6 +7,7 @@ gnome-terminal \
 --tab --title="Playback"        -e "bash -c 'python ../../module/playbacksignal/playbacksignal.py                -i playbacksignal.ini';          bash" \
 --tab --title="Preprocessing"        -e "bash -c 'python ../../module/preprocessing/preprocessing.py                -i preprocessing.ini';          bash" \
 --tab --title="Spectral_CBC"        -e "bash -c 'python ../../module/spectral_cbc/spectral_cbc.py                -i spectral_cbc.ini';          bash" \
+--tab --title="Biotuning"        -e "bash -c 'python ../../module/biotuning/biotuning.py                -i biotuning.ini';          bash" \
 --tab --title="Complexity"      -e "bash -c 'python ../../module/complexity/complexity.py            -i complexity.ini';        bash" \
 --tab --title="Ratios"        -e "bash -c 'python ../../module/postprocessing/postprocessing.py                -i computeratio.ini';          bash" \
 --tab --title="Baseline"      -e "bash -c 'python ../../module/baseline/baseline.py            -i baseline.ini';        bash" \
