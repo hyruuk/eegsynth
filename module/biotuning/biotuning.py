@@ -356,6 +356,15 @@ def multi_oct_subdiv (peaks, max_sub, octave_limit, cons_thresh):
             oct_div_final.append(oct_div_temp[i])
     return oct_div_final, ratios
 
+def zero_padding(harm_ratios, padlen = 20):
+    harm_ratios_padded = np.zeros((20,))
+    for i,_ in enumerate(harm_ratios_padded):
+        try:
+            harm_ratios_padded[i] = harm_ratios[i]
+        except:
+            break
+    return harm_ratios_padded
+
 
 def _setup():
     '''Initialize the module
@@ -422,12 +431,12 @@ def _loop_once():
     input_value = []
     for name in input_name:
         val = patch.getfloat('input', name)
-        print(val)
         input_value.append(val)
 
-    _, harm_ratios = compute_peak_ratios(harmonic_fit(input_value, 50, 0.01, 'mult'))
+    harm_ratios = zero_padding(compute_peak_ratios(harmonic_fit(input_value, 50, 0.01, 'mult'))[1], padlen=20)
     monitor.debug('Peak values : %s ================ Harmonic ratios %s' % (input_value, harm_ratios))
-    patch.setvalue('harmratios', harm_ratios)
+    print(','.join([str(x) for x in harm_ratios]))
+    patch.setvalue('harmratios', ','.join([str(x) for x in harm_ratios]))
 
 def _loop_forever():
     '''Run the main loop forever
