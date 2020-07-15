@@ -84,23 +84,47 @@ class TriggerThread(threading.Thread):
                 if not self.running or not item['type'] == 'message':
                     break
                 if item['channel']==self.redischannel:
-                    # map the Redis values to OSC values
-                    val = float(item['data'])
-                    # the scale and offset options are channel specific
-                    scale  = patch.getfloat('scale', self.name, default=1)
-                    offset = patch.getfloat('offset', self.name, default=0)
-                    # apply the scale and offset
-                    val = EEGsynth.rescale(val, slope=scale, offset=offset)
+                    try:
+                        # map the Redis values to OSC values
+                        val = float(item['data'])
+                        # the scale and offset options are channel specific
+                        scale  = patch.getfloat('scale', self.name, default=1)
+                        offset = patch.getfloat('offset', self.name, default=0)
+                        # apply the scale and offset
+                        val = EEGsynth.rescale(val, slope=scale, offset=offset)
 
-                    monitor.update(self.osctopic, val)
-                    with lock:
-                        # send it as a string with a space as separator
-                        if use_old_version:
-                            msg = OSC.OSCMessage(self.osctopic)
-                            msg.append(val)
-                            s.send(msg)
-                        else:
-                            s.send_message(self.osctopic, val)
+                        monitor.update(self.osctopic, val)
+                        with lock:
+                            # send it as a string with a space as separator
+                            if use_old_version:
+                                msg = OSC.OSCMessage(self.osctopic)
+                                msg.append(val)
+                                s.send(msg)
+                            else:
+                                s.send_message(self.osctopic, val)
+                    except:
+                        # map the Redis values to OSC values
+                        vals = [float(x) for x in item['data'].split(',')]
+
+                        # the scale and offset options are channel specific
+                        scale  = patch.getfloat('scale', self.name, default=1)
+                        offset = patch.getfloat('offset', self.name, default=0)
+                        # apply the scale and offset
+                        for i, val in enumerate(vals):
+                            vals[i] = EEGsynth.rescale(val, slope=scale, offset=offset)
+
+                        monitor.update(self.osctopic, vals)
+                        with lock:
+                            # send it as a string with a space as separator
+                            if use_old_version:
+                                for i, val in enumerate(vals):
+                                    msg = OSC.OSCMessage('{}/{}'.format(self.osctopic, i))
+                                    msg.append(val)
+                                    s.send(msg)
+                            else:
+                                for i, val in enumerate(vals):
+                                    s.send_message('{}/{}'.format(self.osctopic, i), val)
+
 
 
 def _setup():
